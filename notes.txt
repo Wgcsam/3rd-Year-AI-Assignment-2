@@ -1,0 +1,6 @@
+inputs: bunny x & y, in front of bunny, behind bunny, left of bunny, right of bunny
+outputs: up, down, left, right, stay
+activation function: TanH? nothing?
+population size: 50 (how many bunnies per generation)
+fitness function: score
+max generations: 30
