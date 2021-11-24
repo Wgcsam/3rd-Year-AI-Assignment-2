@@ -897,12 +897,41 @@ state = State.MENU
 # Create a new Game object, without a Player object
 game = Game()
 
+
 ##################pgzrun.go()
 
-def main():
+
+def main(genomes, config):
+    nets = []
+    ge = []
+    bunnies = [] #need to amend code so this will run and also add in loads to here
+
+    for g in genomes:
+        net = neat.nn.FeedForwardNetwork(g, config)
+        nets.append(net)
+        bunnies.append(Bunner(position, position))
+        g.fitness = 0
+        ge.append(g)
+    
     pgzrun.go()
 
 main()
 
+def run(config_path):
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                config_path)
+    p = neat.Population(config)
+
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+
+    winner = p.run(main,50)
+
+if __name__ == "__main__":
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, "config.txt")
+    run(config_path)
 
 
