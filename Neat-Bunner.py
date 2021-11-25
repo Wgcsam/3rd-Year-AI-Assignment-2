@@ -892,30 +892,76 @@ except:
 
 
 # Set the initial game state
-state = State.MENU
+#state = State.MENU
 
 # Create a new Game object, without a Player object
-game = Game()
+#game = Game()
 
 
 ##################pgzrun.go()
+state = State.MENU
+game = Game()
+pgzrun.go()
 
-
-def main(genomes, config):
+def main():#(genomes, config):
+    
     nets = []
     ge = []
     bunnies = [] #need to amend code so this will run and also add in loads to here
 
-    for g in genomes:
-        net = neat.nn.FeedForwardNetwork(g, config)
+    for _, g in genomes:
+        net = neat.nn.FeedForwardNetwork.create(g, config)
         nets.append(net)
         bunnies.append(Bunner(position, position))
         g.fitness = 0
         ge.append(g)
-    
-    pgzrun.go()
 
-main()
+    while run:
+        clock.tick(30)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+                pygame.quit()
+                quit()
+
+        #movement in here for bunnies
+        if len(bunnies) > 0:
+            pass
+        else:
+            run = False
+            break
+
+        for x, bunner in enumerate(bunnies):
+            bunner.move()
+            ge[x].fitness += 0.1
+            output = nets[x].activate((bunner.y, abs(bunner.y - pipes[pipe_in].height), abs(bird.y - pipes[pipe_ind].bottom)))
+
+            if output[0] > 0.5:
+                bird.jump()
+
+        for x, bunner in enumerate(bunnies):
+            if bunner.state != PlayerState.ALIVE:
+                ge[x].fitness -= 1
+                bunnies.pop(x)
+                nets.pop(x)
+                ge.pop(x)
+
+        #where score happens
+        for g in ge:
+            g.fitness += 5
+
+        #potentially change above to do with alive so that score is decremented based on how dies
+        #add in drawing and update drawing above
+
+        if score > 100:
+            break
+
+
+    
+    #pgzrun.go()
+    
+
+#main()
 
 def run(config_path):
     config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
@@ -933,5 +979,9 @@ if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config.txt")
     run(config_path)
+
+#import pickle
+#save winner object as file
+#use that winner
 
 
