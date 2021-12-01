@@ -120,18 +120,21 @@ class Bunner(MyActor):
 
     def update(self):
         # Check each control direction
-        for direction in range(4):
-            if key_just_pressed(direction_keys[direction]):
-                self.input_queue.append(direction)
+        #for direction in range(4):
+        #    if key_just_pressed(direction_keys[direction]):
+        #        self.input_queue.append(direction)
 
         if self.state == PlayerState.ALIVE:
+            direction = -1
             # While the player is alive, the timer variable is used for movement. If it's zero, the player is on
             # the ground. If it's above zero, they're currently jumping to a new location.
 
             # Are we on the ground, and are there inputs to process?
-            if self.timer == 0 and len(self.input_queue) > 0:
+            if self.timer == 0: #and len(self.input_queue) > 0:
+                direction = randint(0,3)
                 # Take the next input off the queue and process it
-                self.handle_input(self.input_queue.pop(0))
+                #self.handle_input(self.input_queue.pop(0))
+                self.handle_input(direction)
 
             land = False
             if self.timer > 0:
@@ -897,3 +900,7 @@ state = State.MENU
 game = Game()
 
 pgzrun.go()
+#while game has not ended:
+#    process input
+#    update
+#    draw
