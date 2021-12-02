@@ -29,8 +29,6 @@ ROW_HEIGHT = 40
 # See what happens when you change this to True
 DEBUG_SHOW_ROW_BOUNDARIES = False
 
-bunny_inputs = []
-
 # The MyActor class extends Pygame Zero's Actor class by allowing an object to have a list of child objects,
 # which are drawn relative to the parent object.
 class MyActor(Actor):
@@ -235,6 +233,8 @@ class Bunner(MyActor):
             # underneath other objects. Since the player is always drawn on top of other objects, changing the player
             # sprite is a suitable method of displaying the splash image.
             self.image = "splash" + str(int((100 - self.timer) / 2))
+
+
 
 # Mover is the base class for Car, Log and Train
 # The thing they all have in common, besides inheriting from MyActor, is that they need to store whether they're
@@ -671,6 +671,7 @@ class Game:
     def __init__(self, bunner=None):
         self.bunner = bunner
         self.looped_sounds = {}
+        self.space_pressed = False
 
         try:
             if bunner:
@@ -857,13 +858,13 @@ class State(Enum):
 
 
 def update():
-    global state, game, high_score, bunny_inputs
+    global state, game, high_score
 
     if state == State.MENU:
-        if key_just_pressed(keys.SPACE):
+        if game.space_pressed == False:
+            game.space_pressed = True
             state = State.PLAY
             game = Game(Bunner((240, -320)))
-            bunny_inputs = [game.bunner.movement_state, game.bunner.global_current_row, game.bunner.next_row, game.bunner.prev_row, (game.bunner.x - 10), (game.bunner.x + 10)]
         else:
             game.update()
 
@@ -882,12 +883,13 @@ def update():
                 pass
 
             state = State.GAME_OVER
+            game.space_pressed = False
         else:
             game.update()
 
     elif state == State.GAME_OVER:
         # Switch to menu state, and create a new game object without a player
-        if key_just_pressed(keys.SPACE):
+        if game.space_pressed == False:
             game.stop_looped_sounds()
             state = State.MENU
             game = Game()
@@ -936,23 +938,110 @@ except:
 ##################pgzrun.go()
 state = State.MENU
 game = Game()
+#pgzrun.go()
 
-
-bunny_outputs = [0, 1, 2, 3, (-1)]
-nets = []
-ge = []
+#bunny_outputs = [0, 1, 2, 3, (-1)]
+generation = 0
 
 def eval_genomes(genomes, config):
+    global generation
+    nets = []
+    bunnies = []
+    
     for genome_id, genome in genomes:
         genome.fitness = 4
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         nets.append(net)
-        for bi, bo in zip(bunny_inputs, bunny_outputs):
-            output = net.activate(bi)
-            genome.fitness -= (output[0] - bo[0]) ** 2
-            ge.append(genome)
+        bunnies.append(Bunner())
+        #for bi, bo in zip(bunny_inputs, bunny_outputs):
+        #    output = net.activate(bi)
+        #    genome.fitness -= (output[0] - bo[0]) ** 2
+        #    ge.append(genome)
 
+    #init game
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    clock = pygame.time.Clock()
+    generation_font = pygame.font.SysFont("Arial", 70)
+    font = pygame.font.SysFont("Arial", 30)
 
+    #main loop
+    generation += 1
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit(0)
+
+        for index, bunny in enumerate(bunnies):
+            output = nets[index].activate(bunny.movement_state, bunny.global_current_row, bunny.next_row,
+                                          bunny.prev_row, (bunny.x - 10), (bunny.x + 10)) #update get_data
+            i = output.index(max(output))
+            if i <= 0.2:
+                bunny.input_queue.append(0)
+            elif i > 0.2 and i <= 0.4:
+                bunny.input_queue.append(1)
+            elif i > 0.4 and i <= 0.6:
+                bunny.input_queue.append(2)
+            elif i > 0.6 and i <= 0.8:
+                bunny.input_queue.append(3)
+            elif i > 0.8:
+                bunny.input_queue.append(-1)
+
+        remain_bunnies = 0
+        for i, bunny in enumerate(bunnies):
+            if bunny.state == PlayerState.ALIVE:
+                remain_bunnies += 1
+                bunny.update()
+                genomes[i][1].fitness = (int(-320 - bunny.min_y) // 40) 
+
+        if remain_bunnies == 0:
+            break
+
+        game.draw()
+
+        if state == State.MENU:
+            screen.blit("title", (0, 0))
+            screen.blit("start" + str([0, 1, 2, 1][game.scroll_pos // 6 % 4]), ((WIDTH - 270) // 2, HEIGHT - 240))
+
+        elif state == State.PLAY:
+            # Display score and high score
+            display_number(game.score(), 0, 0, 0)
+            display_number(high_score, 1, WIDTH - 10, 1)
+
+        elif state == State.GAME_OVER:
+            # Display "Game Over" image
+            screen.blit("gameover", (0, 0))
+        #screen.blit()
+        #    for bunny in bunnies:
+        #        if bunny.state == PlayerState.ALIVE:
+        #            bunny.draw(screen)
+
+        text = generation_font.render("Generation : " + str(generation), True, (255, 255, 0))
+        text_rect = text.get_rect()
+        text_rect.center = (screen_width/2, 100)
+        screen.blit(text, text_rect)
+
+        text = font.render("remain cars : " + str(remain_bunnies), True, (0, 0, 0))
+        text_rect = text.get_rect()
+        text_rect.center = (screen_width/2, 200)
+        screen.blit(text, text_rect)
+
+        pygame.display.flip()
+        clock.tick(0)
+
+if __name__ == "__main__":
+    config_path = "./config.txt"
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+
+    p = neat.Population(config)
+
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+
+    p.run(eval_genomes, 10)
     
 #    nets = []
 #    ge = []
@@ -1012,27 +1101,25 @@ def eval_genomes(genomes, config):
 
 #main()
 
-def run(config_path):
-    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                                config_path)
-    p = neat.Population(config)
-
-    p.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    p.add_reporter(stats)
-
-    winner = p.run(eval_genomes,50)
-
-if __name__ == "__main__":
-    local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, "config.txt")
-    run(config_path)
+#def run(config_path):
+#    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+#                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
+#                                config_path)
+#    p = neat.Population(config)
+#
+#    p.add_reporter(neat.StdOutReporter(True))
+#    stats = neat.StatisticsReporter()
+#    p.add_reporter(stats)
+#
+#    winner = p.run(eval_genomes,50)
+#
+#if __name__ == "__main__":
+#    local_dir = os.path.dirname(__file__)
+#    config_path = os.path.join(local_dir, "config.txt")
+#    run(config_path)
     
 
 #import pickle
 #save winner object as file
 #use that winner
-
-pgzrun.go()
 
