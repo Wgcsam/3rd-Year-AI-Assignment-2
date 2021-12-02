@@ -29,6 +29,8 @@ ROW_HEIGHT = 40
 # See what happens when you change this to True
 DEBUG_SHOW_ROW_BOUNDARIES = False
 
+bunny_inputs = []
+
 # The MyActor class extends Pygame Zero's Actor class by allowing an object to have a list of child objects,
 # which are drawn relative to the parent object.
 class MyActor(Actor):
@@ -92,6 +94,10 @@ class Bunner(MyActor):
 
         self.direction = 2
         self.timer = 0
+        self.movement_state = None      #stores state of movement required
+        self.next_row = None            #stores the row above the bunny
+        self.global_current_row = None  #stores the row the bunny is currently on
+        self.prev_row = None            #stores the row below the bunny
 
         # If a control input is pressed while the rabbit is in the middle of jumping, it's added to the input queue
         self.input_queue = []
@@ -141,11 +147,37 @@ class Bunner(MyActor):
                 self.timer -= 1
                 land = self.timer == 0      # If timer reaches zero, we've just landed
 
+            current_found = False           # *** Putting in a flag, so we can run once more through the for loop
             current_row = None
+            
             for row in game.rows:
-                if row.y == self.y:
-                    current_row = row
+                if current_found:
+                    self.next_row = row
+                    # *** print('Next row.y: ' + str(row.y))
                     break
+                if row.y == self.y:
+                    current_row = row       # *** Here is where you could also set next_row to do look ahead stuff
+                    self.global_current_row = current_row
+                    current_found = True
+                    
+                if row.y == self.y + 40:
+                    self.prev_row = row
+                    
+                    # *** print('Current row.y: ' + str(row.y))
+                
+            # *** print(self.y)             # *** This gives the absolute y coordinate of the row Bunner is in,
+                                            # *** starting at -320 and going up in decrements of 40; so the next row
+                                            # *** up is -360. So, why start at -320? because y=0 is the bottom row
+                                            # *** of the starting play area on screen.
+                                            
+            # *** Here is where we would do a check for potential collisions, but make sure that the PlayerState is
+            # *** not changed by the collision checks you might do
+
+            if self.next_row:
+                #print('Next row type: ' + type(self.next_row).__name__)
+                self.movement_state = type(self.next_row).__name__
+                # *** suggested_state, suggested_obj_y_offset = next_row.check_collision(self.x)
+                # *** print('State: ' + str(suggested_state) + ' Y Offset: ' + str(suggested_obj_y_offset))
 
             if current_row:
                 # Row.check receives the player's X coordinate and returns the new state the player should be in
@@ -822,13 +854,16 @@ class State(Enum):
     PLAY = 2
     GAME_OVER = 3
 
+
+
 def update():
-    global state, game, high_score
+    global state, game, high_score, bunny_inputs
 
     if state == State.MENU:
         if key_just_pressed(keys.SPACE):
             state = State.PLAY
             game = Game(Bunner((240, -320)))
+            bunny_inputs = [game.bunner.movement_state, game.bunner.global_current_row, game.bunner.next_row, game.bunner.prev_row, (game.bunner.x - 10), (game.bunner.x + 10)]
         else:
             game.update()
 
@@ -901,65 +936,79 @@ except:
 ##################pgzrun.go()
 state = State.MENU
 game = Game()
-pgzrun.go()
 
-def main():#(genomes, config):
-    
-    nets = []
-    ge = []
-    bunnies = [] #need to amend code so this will run and also add in loads to here
 
-    for _, g in genomes:
-        net = neat.nn.FeedForwardNetwork.create(g, config)
+bunny_outputs = [0, 1, 2, 3, (-1)]
+nets = []
+ge = []
+
+def eval_genomes(genomes, config):
+    for genome_id, genome in genomes:
+        genome.fitness = 4
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
         nets.append(net)
-        bunnies.append(Bunner(position, position))
-        g.fitness = 0
-        ge.append(g)
-
-    while run:
-        clock.tick(30)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-                pygame.quit()
-                quit()
-
-        #movement in here for bunnies
-        if len(bunnies) > 0:
-            pass
-        else:
-            run = False
-            break
-
-        for x, bunner in enumerate(bunnies):
-            bunner.move()
-            ge[x].fitness += 0.1
-            output = nets[x].activate((bunner.y, abs(bunner.y - pipes[pipe_in].height), abs(bird.y - pipes[pipe_ind].bottom)))
-
-            if output[0] > 0.5:
-                bird.jump()
-
-        for x, bunner in enumerate(bunnies):
-            if bunner.state != PlayerState.ALIVE:
-                ge[x].fitness -= 1
-                bunnies.pop(x)
-                nets.pop(x)
-                ge.pop(x)
-
-        #where score happens
-        for g in ge:
-            g.fitness += 5
-
-        #potentially change above to do with alive so that score is decremented based on how dies
-        #add in drawing and update drawing above
-
-        if score > 100:
-            break
+        for bi, bo in zip(bunny_inputs, bunny_outputs):
+            output = net.activate(bi)
+            genome.fitness -= (output[0] - bo[0]) ** 2
+            ge.append(genome)
 
 
     
-    #pgzrun.go()
-    
+#    nets = []
+#    ge = []
+#    bunnies = [] #need to amend code so this will run and also add in loads to here
+#
+#    for _, g in genomes:
+#        net = neat.nn.FeedForwardNetwork.create(g, config)
+#        nets.append(net)
+#        bunnies.append(Bunner(position, position))
+#        g.fitness = 0
+#        ge.append(g)
+#
+#    while run:
+#        clock.tick(30)
+#        for event in pygame.event.get():
+#            if event.type == pygame.QUIT:
+#                run = False
+#                pygame.quit()
+#                quit()
+#
+#        #movement in here for bunnies
+#        if len(bunnies) > 0:
+#            pass
+#        else:
+#            run = False
+#            break
+#
+#        for x, bunner in enumerate(bunnies):
+#            bunner.move()
+#            ge[x].fitness += 0.1
+#            output = nets[x].activate((bunner.y, abs(bunner.y - pipes[pipe_in].height), abs(bird.y - pipes[pipe_ind].bottom)))
+#
+#            if output[0] > 0.5:
+#                bird.jump()
+#
+#        for x, bunner in enumerate(bunnies):
+#            if bunner.state != PlayerState.ALIVE:
+#                ge[x].fitness -= 1
+#                bunnies.pop(x)
+#                nets.pop(x)
+#                ge.pop(x)
+#
+#        #where score happens
+#        for g in ge:
+#            g.fitness += 5
+#
+#        #potentially change above to do with alive so that score is decremented based on how dies
+#        #add in drawing and update drawing above
+#
+#        if score > 100:
+#            break
+#
+#
+#    
+#    #pgzrun.go()
+#    
 
 #main()
 
@@ -973,15 +1022,17 @@ def run(config_path):
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    winner = p.run(main,50)
+    winner = p.run(eval_genomes,50)
 
 if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config.txt")
     run(config_path)
+    
 
 #import pickle
 #save winner object as file
 #use that winner
 
+pgzrun.go()
 

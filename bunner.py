@@ -4,6 +4,9 @@ import pgzero, pgzrun, pygame, sys
 from random import *
 from enum import Enum
 
+import os
+import neat
+
 # Check Python version number. sys.version_info gives version as a tuple, e.g. if (3,7,2,'final',0) for version 3.7.2.
 # Unlike many languages, Python can compare two tuples in the same way that you can compare numbers.
 if sys.version_info < (3,5):

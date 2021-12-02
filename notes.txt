@@ -1,4 +1,4 @@
-inputs: bunny x & y, in front of bunny, behind bunny, left of bunny, right of bunny
+inputs: movement_state, global_current_row, next_row, prev_row, bunny x - 10, bunny x + 10
 outputs: up, down, left, right, stay
 activation function: TanH? nothing?
 population size: 50 (how many bunnies per generation)
