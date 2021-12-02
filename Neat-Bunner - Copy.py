@@ -3,6 +3,7 @@
 import pgzero, pgzrun, pygame, sys, neat
 from random import *
 from enum import Enum
+import numpy as np
 
 # Check Python version number. sys.version_info gives version as a tuple, e.g. if (3,7,2,'final',0) for version 3.7.2.
 # Unlike many languages, Python can compare two tuples in the same way that you can compare numbers.
@@ -68,6 +69,14 @@ class PlayerState(Enum):
     SPLASH = 2
     EAGLE = 3
 
+class RowState(Enum):
+    Grass = 0
+    Dirt = 1
+    Water = 2
+    Road = 3
+    Pavement = 4
+    Rail = 5
+
 # Constants representing directions
 DIRECTION_UP = 0
 DIRECTION_RIGHT = 1
@@ -82,10 +91,30 @@ direction_keys = [keys.UP, keys.RIGHT, keys.DOWN, keys.LEFT]
 DX = [0,4,0,-4]
 DY = [-4,0,4,0]
 
+generation = 0
+bunnies = []
+ge = []
+nets = []
+
+def eval_genomes(genomes, config):
+    global generation, bunnies, nets, ge, game
+    for genome_id, genome in genomes:
+        genome.fitness = 4
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        nets.append(net)
+        bunnies.append(Game(Bunner((240, -320))))
+        ge.append(genome)
+    #add in here running of game
+    
+
+def NormalizeData(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
 class Bunner(MyActor):
+    global generation, bunnies, nets  , ge
     MOVE_DISTANCE = 10
 
-    def __init__(self, pos, genomes, config):
+    def __init__(self, pos):
         super().__init__("blank", pos)
 
         self.state = PlayerState.ALIVE
@@ -121,21 +150,38 @@ class Bunner(MyActor):
 
                 # No need to continue searching
                 return
+    def get_data(self):
+        #ret = [self.movement_state, self.global_current_row, self.next_row,
+        #        self.prev_row, (self.x - 10), (self.x + 10)]
+        ret = [NormalizeData(self.x - 10), NormalizeData(self.x + 10)]
+        return ret
 
     def update(self):
         # Check each control direction
         for direction in range(4):
             if key_just_pressed(direction_keys[direction]):
                 self.input_queue.append(direction)
-
+                
         if self.state == PlayerState.ALIVE:
             # While the player is alive, the timer variable is used for movement. If it's zero, the player is on
             # the ground. If it's above zero, they're currently jumping to a new location.
-
+            
             # Are we on the ground, and are there inputs to process?
-            if self.timer == 0 and len(self.input_queue) > 0:
+            if self.timer == 0:
                 # Take the next input off the queue and process it
-                self.handle_input(self.input_queue.pop(0))
+                for index, bunny in enumerate(bunnies):
+                    output = nets[index].activate(self.get_data())
+                    i = output.index(max(output))
+                    if i <= 0.2:
+                        self.handle_input(0)
+                    elif i > 0.2 and i <= 0.4:
+                        self.handle_input(1)
+                    elif i > 0.4 and i <= 0.6:
+                        self.handle_input(2)
+                    elif i > 0.6 and i <= 0.8:
+                        self.handle_input(3)
+                    elif i > 0.8:
+                        pass
 
             land = False
             if self.timer > 0:
@@ -215,6 +261,8 @@ class Bunner(MyActor):
         else:
             # Not alive - timer now counts down prior to game over screen
             self.timer -= 1
+            for g in ge:
+                g.fitness = (int(-320 - self.min_y) // 40)
 
         # Keep track of the furthest we've got in the level
         self.min_y = min(self.min_y, self.y)
@@ -819,6 +867,7 @@ class Game:
             # If sound system is not working/present, ignore the error
             pass
 
+
 # Dictionary to keep track of which keys are currently being held down
 key_status = {}
 
@@ -855,17 +904,32 @@ class State(Enum):
     PLAY = 2
     GAME_OVER = 3
 
+def game_run():
+    config_path = "./config.txt"
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+
+    p = neat.Population(config)
+
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+
+    p.run(eval_genomes, 10)
 
 
 def update():
-    global state, game, high_score
+    global state, game, high_score, generation, bunnies
 
     if state == State.MENU:
-        if game.space_pressed == False:
-            game.space_pressed = True
+        if key_just_pressed(keys.SPACE):
             state = State.PLAY
-            game = Game(Bunner((240, -320), eval_genomes, 10))
-            
+            game_run()
+            if generation <= 10:
+                game = bunnies[generation]
+                generation += 1
+            else:
+                pass
         else:
             game.update()
 
@@ -884,16 +948,13 @@ def update():
                 pass
 
             state = State.GAME_OVER
-            game.space_pressed = False
         else:
             game.update()
 
     elif state == State.GAME_OVER:
         # Switch to menu state, and create a new game object without a player
-        if game.space_pressed == False:
-            game.stop_looped_sounds()
-            state = State.MENU
-            game = Game()
+        game.stop_looped_sounds()
+        state = State.MENU
 
 def draw():
     game.draw()
@@ -935,193 +996,22 @@ except:
 # Create a new Game object, without a Player object
 #game = Game()
 
-
-##################pgzrun.go()
-state = State.MENU
-game = Game()
-#pgzrun.go()
-
-#bunny_outputs = [0, 1, 2, 3, (-1)]
-generation = 0
-
-def eval_genomes(genomes, config):
-    global generation
-    nets = []
-    bunnies = []
-    
-    for genome_id, genome in genomes:
-        genome.fitness = 4
-        net = neat.nn.FeedForwardNetwork.create(genome, config)
-        nets.append(net)
-        bunnies.append(Bunner())
-        #for bi, bo in zip(bunny_inputs, bunny_outputs):
-        #    output = net.activate(bi)
-        #    genome.fitness -= (output[0] - bo[0]) ** 2
-        #    ge.append(genome)
-
-    #init game
-    pygame.init()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    clock = pygame.time.Clock()
-    generation_font = pygame.font.SysFont("Arial", 70)
-    font = pygame.font.SysFont("Arial", 30)
-
-    #main loop
-    generation += 1
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit(0)
-
-        for index, bunny in enumerate(bunnies):
-            output = nets[index].activate(bunny.movement_state, bunny.global_current_row, bunny.next_row,
-                                          bunny.prev_row, (bunny.x - 10), (bunny.x + 10)) #update get_data
-            i = output.index(max(output))
-            if i <= 0.2:
-                bunny.input_queue.append(0)
-            elif i > 0.2 and i <= 0.4:
-                bunny.input_queue.append(1)
-            elif i > 0.4 and i <= 0.6:
-                bunny.input_queue.append(2)
-            elif i > 0.6 and i <= 0.8:
-                bunny.input_queue.append(3)
-            elif i > 0.8:
-                bunny.input_queue.append(-1)
-
-        remain_bunnies = 0
-        for i, bunny in enumerate(bunnies):
-            if bunny.state == PlayerState.ALIVE:
-                remain_bunnies += 1
-                bunny.update()
-                genomes[i][1].fitness = (int(-320 - bunny.min_y) // 40) 
-
-        if remain_bunnies == 0:
-            break
-
-        game.draw()
-
-        if state == State.MENU:
-            screen.blit("title", (0, 0))
-            screen.blit("start" + str([0, 1, 2, 1][game.scroll_pos // 6 % 4]), ((WIDTH - 270) // 2, HEIGHT - 240))
-
-        elif state == State.PLAY:
-            # Display score and high score
-            display_number(game.score(), 0, 0, 0)
-            display_number(high_score, 1, WIDTH - 10, 1)
-
-        elif state == State.GAME_OVER:
-            # Display "Game Over" image
-            screen.blit("gameover", (0, 0))
-        #screen.blit()
-        #    for bunny in bunnies:
-        #        if bunny.state == PlayerState.ALIVE:
-        #            bunny.draw(screen)
-
-        text = generation_font.render("Generation : " + str(generation), True, (255, 255, 0))
-        text_rect = text.get_rect()
-        text_rect.center = (screen_width/2, 100)
-        screen.blit(text, text_rect)
-
-        text = font.render("remain cars : " + str(remain_bunnies), True, (0, 0, 0))
-        text_rect = text.get_rect()
-        text_rect.center = (screen_width/2, 200)
-        screen.blit(text, text_rect)
-
-        pygame.display.flip()
-        clock.tick(0)
-
-if __name__ == "__main__":
-    config_path = "./config.txt"
-    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
-
-    p = neat.Population(config)
-
-    p.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    p.add_reporter(stats)
-
-    p.run(eval_genomes, 10)
-    
-#    nets = []
-#    ge = []
-#    bunnies = [] #need to amend code so this will run and also add in loads to here
-#
-#    for _, g in genomes:
-#        net = neat.nn.FeedForwardNetwork.create(g, config)
-#        nets.append(net)
-#        bunnies.append(Bunner(position, position))
-#        g.fitness = 0
-#        ge.append(g)
-#
-#    while run:
-#        clock.tick(30)
-#        for event in pygame.event.get():
-#            if event.type == pygame.QUIT:
-#                run = False
-#                pygame.quit()
-#                quit()
-#
-#        #movement in here for bunnies
-#        if len(bunnies) > 0:
-#            pass
-#        else:
-#            run = False
-#            break
-#
-#        for x, bunner in enumerate(bunnies):
-#            bunner.move()
-#            ge[x].fitness += 0.1
-#            output = nets[x].activate((bunner.y, abs(bunner.y - pipes[pipe_in].height), abs(bird.y - pipes[pipe_ind].bottom)))
-#
-#            if output[0] > 0.5:
-#                bird.jump()
-#
-#        for x, bunner in enumerate(bunnies):
-#            if bunner.state != PlayerState.ALIVE:
-#                ge[x].fitness -= 1
-#                bunnies.pop(x)
-#                nets.pop(x)
-#                ge.pop(x)
-#
-#        #where score happens
-#        for g in ge:
-#            g.fitness += 5
-#
-#        #potentially change above to do with alive so that score is decremented based on how dies
-#        #add in drawing and update drawing above
-#
-#        if score > 100:
-#            break
-#
-#
-#    
-#    #pgzrun.go()
-#    
-
-#main()
-
-#def run(config_path):
+#if __name__ == "__main__":
+#    config_path = "./config.txt"
 #    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
-#                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
-#                                config_path)
+#                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+#
 #    p = neat.Population(config)
 #
 #    p.add_reporter(neat.StdOutReporter(True))
 #    stats = neat.StatisticsReporter()
 #    p.add_reporter(stats)
 #
-#    winner = p.run(eval_genomes,50)
-#
-#if __name__ == "__main__":
-#    local_dir = os.path.dirname(__file__)
-#    config_path = os.path.join(local_dir, "config.txt")
-#    run(config_path)
-    
+#    p.run(eval_genomes, 10)
 
-#import pickle
-#save winner object as file
-#use that winner
 
+##################pgzrun.go()
+state = State.MENU
+game = Game()
 pgzrun.go()
+
