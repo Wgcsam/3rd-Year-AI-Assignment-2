@@ -4,3 +4,13 @@ activation function: TanH? nothing?
 population size: 50 (how many bunnies per generation)
 fitness function: score
 max generations: 30
+
+
+grass 
+dirt 
+water
+road
+pavement
+rail
+
+https://github.com/monokim/framework_tutorial/blob/master/neat/PyCar.py
