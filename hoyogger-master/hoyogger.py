@@ -4,6 +4,9 @@ import pygame
 import math
 import neat
 import numpy as np
+import os
+import pickle
+from datetime import datetime, timedelta
 
 generation = 0
 
@@ -429,6 +432,10 @@ class Game(StateMachine):
         y = SCREEN_HEIGHT / 2 - img_ready.get_height() / 2
         render_buffer.blit(img_ready, (x, y))
 
+    #def draw(squids):
+        #for squid in squids:
+            #squid.draw()
+
     def _game_enter(self):
         #pygame.mixer.music.load('bgmGame.wav')
         #pygame.mixer.music.set_volume(0.25)
@@ -496,18 +503,19 @@ img_char_flipped = pygame.transform.flip(img_char, True, False)
 img_bg = pygame.image.load('bg.png')
 img_frame = pygame.image.load('frame.png')
 
-def run_squid(genomes, config):
+def eval_genomes(genomes, config):
     
     #init NEAT
     nets = []
+    ge = []
     squids = []
 
-    for genome_id, genome in genomes:
-        genome.fitness = 4
+    for _, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         nets.append(net)
-
         squids.append(Player(4, 12))
+        genome.fitness = 0
+        ge.append(genome)
 
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -528,38 +536,59 @@ def run_squid(genomes, config):
     snd_dead = pygame.mixer.Sound('dead.wav')
     snd_goal = pygame.mixer.Sound('goal.wav')
     #key_state = KeyState()
+    generation_font = pygame.font.SysFont("Arial", 70)
+    font = pygame.font.SysFont("Arial", 30)
+
+    counter = 0
 
 
     # メインループ
     game = Game()
     quit_game = False
+    global generation
+    generation += 1
+
     while not quit_game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 quit_game = True
+                #pygame.quit()
+                #quit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 quit_game = True
+                #pygame.quit()
+                #quit()
 
         for index, squid in enumerate(squids):
             output = nets[index].activate(squid.get_data())
-            i = output.index(max(output))
-            if i <= 0.2:
+            #i = output.index(max(output))
+            #if i <= 0.2:
+            if output[0] > 0.5:
                 squid.left = True
-            elif i > 0.2 and i <= 0.4:
+            #elif i > 0.2 and i <= 0.4:
+            if output[1] > 0.5:
                 squid.right = True
-            elif i > 0.4 and i <= 0.6:
+            #elif i > 0.4 and i <= 0.6:
+            if output[2] > 0.5:
                 squid.up = True
-            elif i > 0.6 and i <= 0.8:
+            #elif i > 0.6 and i <= 0.8:
+            if output[3] > 0.5:
                 squid.down = True
-            elif i > 0.8:
-                    pass
+            #elif i > 0.8:
+            if output[4] > 0.5:
+                pass
 
         remain_squids = 0
         for i, squid in enumerate(squids):
             if squid.is_alive():
                 remain_squids += 1
                 squid._walk_update()
-                genomes[i][1].fitness = squid.get_reward()
+                ge[i].fitness = squid.y
+            else:
+                ge[i].fitness -= 1
+                squids.pop(i)
+                nets.pop(i)
+                ge.pop(i)
 
         if remain_squids == 0:
             break
@@ -571,19 +600,31 @@ def run_squid(genomes, config):
         # 描画
         render_buffer.fill((0, 0, 0))  # 画面クリア
         game.draw()
+        #game.draw(squids)
         screen.blit(pygame.transform.scale(render_buffer, (WINDOW_WIDTH, WINDOW_HEIGHT)), (0, 0))  # 拡大コピー
+
+        text = generation_font.render("Generation : " + str(generation), True, (255, 255, 0))
+        text_rect = text.get_rect()
+        text_rect.center = (WINDOW_WIDTH/2, 100)
+        screen.blit(text, text_rect)
+
+        text = font.render("remaining squids : " + str(remain_squids), True, (0, 0, 0))
+        text_rect = text.get_rect()
+        text_rect.center = (WINDOW_WIDTH/2, 200)
+        screen.blit(text, text_rect)
+
 
         pygame.display.flip()   # バッファフリップ
         clock.tick(60)          # フレームレートを60fpsに保つ
+        
 
         # 終了
         #pygame.quit()
         #sys.exit(0)
 
-if __name__ == "__main__":
-    config_path = "./config.txt"
-    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+def run(config_file):
+    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_file)
 
     
     p = neat.Population(config)
@@ -592,6 +633,19 @@ if __name__ == "__main__":
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
+    p.add_reporter(neat.Checkpointer(5))
 
-    # Run NEAT
-    p.run(run_squid, 1000)
+
+    winner = p.run(eval_genomes, 1000)
+
+    print('\nBest genome:\n{!s}'.format(winner))
+    
+
+if __name__ == "__main__":
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, 'config.txt')
+    run(config_path)
+
+pygame.quit()
+sys.exit(0)
+    
