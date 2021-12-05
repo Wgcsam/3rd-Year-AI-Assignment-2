@@ -9,6 +9,7 @@ import pickle
 from datetime import datetime, timedelta
 
 generation = 0
+iterator = 0
 
 
 # 円と円のあたり判定
@@ -179,7 +180,8 @@ class Player(StateMachine):
         render_buffer.blit(img_char, (self.x, self.y), (i * 24, 0, 24, 24))
 
     def _dead_enter(self):
-        snd_dead.play()
+        #snd_dead.play()
+        pass
 
     def _dead_draw(self):
         i = int(self.get_frame_count() / 2)
@@ -187,7 +189,8 @@ class Player(StateMachine):
             render_buffer.blit(img_char, (self.x, self.y), (i * 24, 72, 24, 24))
 
     def _goal_enter(self):
-        snd_goal.play()
+        #snd_goal.play()
+        pass
 
     def _goal_draw(self):
         j = [0, 1, 2, 1]
@@ -195,7 +198,8 @@ class Player(StateMachine):
         render_buffer.blit(img_char, (self.x, self.y), (i * 24, 0, 24, 24))
 
     def get_data(self):
-        ret = [NormalizeData(self.x), NormalizeData(self.y)]
+        global iterator
+        ret = [self.x, self.y, iterator]
         return ret
 
     def get_reward(self):
@@ -384,10 +388,12 @@ class Game(StateMachine):
             #'game'
         )
         self._stage = 0
+        self._player = []
+        
 
     def _title_update(self):
         if key_state.get_key_down(pygame.K_SPACE):
-            snd_button.play()
+            #snd_button.play()
             self.change_state('ready')
             self._stage = 0
 
@@ -403,12 +409,12 @@ class Game(StateMachine):
         render_buffer.blit(img_bg, (0, 0))
         for e in self._enemies:
             e.draw()
-        self._player.draw()
+        for i in self._player:
+            i.draw()
         render_buffer.blit(img_frame, (0, 0))
 
     def _ready_enter(self):
         # ゲームの準備
-        self._player = Player(4, 12)
         self._enemies = []
         for y in range(0, MAP_NUM_Y):
             for x in range(0, MAP_NUM_X):
@@ -443,13 +449,16 @@ class Game(StateMachine):
         pass
 
     def _game_update(self): # here's where we determine if player is still alive
+        global iterator
         # 衝突判定
-        if self._player.get_state() == 'walk':
-            for e in self._enemies:
-                if circle_hit_circle(self._player.x, self._player.y, OBJ_SIZE / 2 - 4, e.x, e.y, OBJ_SIZE / 2 - 4):
-                    self._player.change_state('dead')
+        iterator += 1
+        for i in self._player:
+            if i.get_state() == 'walk':
+                for e in self._enemies:
+                    if circle_hit_circle(i.x, i.y, OBJ_SIZE / 2 - 4, e.x, e.y, OBJ_SIZE / 2 - 4):
+                        i.change_state('dead')
 
-        self._player.update()
+            i.update()
         for e in self._enemies:
             e.update()
 
@@ -462,18 +471,19 @@ class Game(StateMachine):
         #    self._stage = (self._stage + 1) % len(Game.STAGE_DATA)
         #    self.change_state('ready')
 
-        if self._player.get_state() != 'walk':
-            pygame.mixer.music.stop()
+        #if self._player.get_state() != 'walk':
+        #    pygame.mixer.music.stop()
 
     def _game_draw(self):
         self._draw_game_objects()
         pygame.draw.line(render_buffer, (255, 0, 0), (MAP_LEFT, MAP_TOP + OBJ_SIZE), (MAP_RIGHT-1, MAP_TOP + OBJ_SIZE))
 
         # ゴール表示
-        if self._player.get_state() == 'walk' and self.get_frame_count() % 60 >= 30 and self._player.y > MAP_TOP + OBJ_SIZE * 2:
-            x = SCREEN_WIDTH / 2 - img_goal.get_width() / 2
-            y = MAP_TOP + OBJ_SIZE - img_goal.get_height() - 4
-            render_buffer.blit(img_goal, (x, y))
+        for i in self._player:
+            if i.get_state() == 'walk' and self.get_frame_count() % 60 >= 30 and i.y > MAP_TOP + OBJ_SIZE * 2:
+                x = SCREEN_WIDTH / 2 - img_goal.get_width() / 2
+                y = MAP_TOP + OBJ_SIZE - img_goal.get_height() - 4
+                render_buffer.blit(img_goal, (x, y))
 
         # ゲーム―バー表示
         #if self._player.get_state() == 'dead':
@@ -503,12 +513,15 @@ img_char_flipped = pygame.transform.flip(img_char, True, False)
 img_bg = pygame.image.load('bg.png')
 img_frame = pygame.image.load('frame.png')
 
+
 def eval_genomes(genomes, config):
+    global iterator, squids
     
     #init NEAT
     nets = []
     ge = []
     squids = []
+    iterator = 0
 
     for _, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
@@ -544,11 +557,16 @@ def eval_genomes(genomes, config):
 
     # メインループ
     game = Game()
+    game._player = squids
     quit_game = False
     global generation
     generation += 1
 
-    while not quit_game:
+    #game._ready_enter(squids)
+    #game._ready_update()
+    #game._ready_draw()
+
+    while not quit_game and iterator < 1000:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 quit_game = True
@@ -582,10 +600,11 @@ def eval_genomes(genomes, config):
         for i, squid in enumerate(squids):
             if squid.is_alive():
                 remain_squids += 1
-                squid._walk_update()
-                ge[i].fitness = squid.y
+                #squid._walk_update()
+                #squid.draw()
+                ge[i].fitness = squid.get_reward()
             else:
-                ge[i].fitness -= 1
+                ge[i].fitness -= 10
                 squids.pop(i)
                 nets.pop(i)
                 ge.pop(i)
@@ -613,6 +632,7 @@ def eval_genomes(genomes, config):
         text_rect.center = (WINDOW_WIDTH/2, 200)
         screen.blit(text, text_rect)
 
+        #iterator += 1
 
         pygame.display.flip()   # バッファフリップ
         clock.tick(60)          # フレームレートを60fpsに保つ
@@ -636,7 +656,7 @@ def run(config_file):
     p.add_reporter(neat.Checkpointer(5))
 
 
-    winner = p.run(eval_genomes, 1000)
+    winner = p.run(eval_genomes, 100)
 
     print('\nBest genome:\n{!s}'.format(winner))
     
