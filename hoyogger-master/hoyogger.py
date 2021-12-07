@@ -199,11 +199,45 @@ class Player(StateMachine):
 
     def get_data(self):
         global iterator
-        ret = [self.x, self.y, iterator]
+        ret = [self.x, self.y, iterator, abs(self.x - (SCREEN_WIDTH / 2)), abs(self.y - (SCREEN_HEIGHT / 2))]  #self.dist_check_x(), self.dist_check_y()]
         return ret
 
     def get_reward(self):
-        return (320 - self.y)
+        ret = (320 - self.y)
+        if self.y < 100:
+            ret = ((320 - self.y) + (120 - self.dist_check_x()))
+        if self.y < 280:
+            ret += 10
+        if self.y < 240:
+            ret += 10
+        if self.y < 200:
+            ret += 10
+        if self.y < 160:
+            ret += 10
+        if self.y < 120:
+            ret += 10
+        if self.y < 80:
+            ret += 10
+        if self.y < 40:
+            ret += 10
+            if self.dist_check_x() < 30:
+                ret += 10
+        if self.y < 20:
+            ret += 20
+        #if self.goal_check() < 30:
+        #    ret += 20
+        return ret
+
+    def dist_check_x(self):
+        dx = abs(self.x - 120)
+        return dx
+
+    def dist_check_y (self):
+        dy = abs(self.y - 310)
+        return dy
+
+    def goal_check (self):
+        return self.dist_check_x() + self.dist_check_y()
 
     def is_alive(self):
         if self.get_state() == 'dead':
@@ -524,7 +558,7 @@ def eval_genomes(genomes, config):
     iterator = 0
 
     for _, genome in genomes:
-        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        net = neat.nn.RecurrentNetwork.create(genome, config)
         nets.append(net)
         squids.append(Player(4, 12))
         genome.fitness = 0
@@ -582,16 +616,16 @@ def eval_genomes(genomes, config):
             #i = output.index(max(output))
             #if i <= 0.2:
             if output[0] > 0.5:
-                squid.left = True
+                squid.up = True
             #elif i > 0.2 and i <= 0.4:
             if output[1] > 0.5:
-                squid.right = True
+                squid.down = True
             #elif i > 0.4 and i <= 0.6:
             if output[2] > 0.5:
-                squid.up = True
+                squid.left = True
             #elif i > 0.6 and i <= 0.8:
             if output[3] > 0.5:
-                squid.down = True
+                squid.right = True
             #elif i > 0.8:
             if output[4] > 0.5:
                 pass
@@ -603,6 +637,7 @@ def eval_genomes(genomes, config):
                 #squid._walk_update()
                 #squid.draw()
                 ge[i].fitness = squid.get_reward()
+                #ge[i].fitness += 0.001
             else:
                 ge[i].fitness -= 10
                 squids.pop(i)
@@ -622,7 +657,7 @@ def eval_genomes(genomes, config):
         #game.draw(squids)
         screen.blit(pygame.transform.scale(render_buffer, (WINDOW_WIDTH, WINDOW_HEIGHT)), (0, 0))  # 拡大コピー
 
-        text = generation_font.render("Generation : " + str(generation), True, (255, 255, 0))
+        text = generation_font.render("Generation : " + str(generation), True, (0, 0, 0))
         text_rect = text.get_rect()
         text_rect.center = (WINDOW_WIDTH/2, 100)
         screen.blit(text, text_rect)
@@ -635,7 +670,7 @@ def eval_genomes(genomes, config):
         #iterator += 1
 
         pygame.display.flip()   # バッファフリップ
-        clock.tick(60)          # フレームレートを60fpsに保つ
+        clock.tick(120)          # フレームレートを60fpsに保つ
         
 
         # 終了
@@ -656,7 +691,7 @@ def run(config_file):
     p.add_reporter(neat.Checkpointer(5))
 
 
-    winner = p.run(eval_genomes, 100)
+    winner = p.run(eval_genomes, 1000)
 
     print('\nBest genome:\n{!s}'.format(winner))
     
