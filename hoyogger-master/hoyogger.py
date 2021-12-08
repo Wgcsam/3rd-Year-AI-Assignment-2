@@ -204,26 +204,26 @@ class Player(StateMachine):
 
     def get_reward(self):
         ret = (320 - self.y)
-        if self.y < 100:
+        if self.y < 60:
             ret = ((320 - self.y) + (120 - self.dist_check_x()))
-        if self.y < 280:
-            ret += 10
-        if self.y < 240:
-            ret += 10
-        if self.y < 200:
-            ret += 10
-        if self.y < 160:
-            ret += 10
-        if self.y < 120:
-            ret += 10
-        if self.y < 80:
-            ret += 10
-        if self.y < 40:
-            ret += 10
-            if self.dist_check_x() < 30:
-                ret += 10
-        if self.y < 20:
-            ret += 20
+        #if self.y < 280:
+        #    ret += 10
+        #if self.y < 240:
+        #    ret += 10
+        #if self.y < 200:
+        #    ret += 10
+        #if self.y < 160:
+        #    ret += 10
+        #if self.y < 120:
+        #    ret += 10
+        #if self.y < 80:
+        #    ret += 10
+        #if self.y < 40:
+        #    ret += 10
+        #    if self.dist_check_x() < 30:
+        #        ret += 10
+        #if self.y < 20:
+        #    ret += 20
         #if self.goal_check() < 30:
         #    ret += 20
         return ret
