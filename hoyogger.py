@@ -203,9 +203,12 @@ class Player(StateMachine):
         return ret
 
     def get_reward(self):
-        ret = (320 - self.y)
-        if self.y < 60:
-            ret = ((320 - self.y) + (120 - self.dist_check_x()))
+        if self.y < 290:
+            ret = (320 - self.y)
+            if self.y < 60:
+                ret = ((320 - self.y) + (120 - self.dist_check_x()))
+        else:
+            ret = 0
         #if self.y < 280:
         #    ret += 10
         #if self.y < 240:
@@ -244,6 +247,12 @@ class Player(StateMachine):
             return False
         else:
             return True
+
+    def is_goal(self):
+        if self.get_state() == 'goal':
+            return True
+        else:
+            return False
 
 
 # 敵キャラクター（雲丹）
@@ -483,8 +492,20 @@ class Game(StateMachine):
         pass
 
     def _game_update(self): # here's where we determine if player is still alive
-        global iterator
+        global iterator#, generation
         # 衝突判定
+        #if generation <= 20:
+        #    iterator += 25
+        #elif generation > 20 and generation <= 40:
+        #    iterator += 20
+        #elif generation > 40 and generation <= 60:
+        #    iterator += 15
+        #elif generation > 60 and generation <= 80:
+        #    iterator += 10
+        #elif generation > 80 and generation <= 100:
+        #    iterator += 5
+        #else:
+        #    iterator += 1
         iterator += 1
         for i in self._player:
             if i.get_state() == 'walk':
@@ -638,8 +659,14 @@ def eval_genomes(genomes, config):
                 #squid.draw()
                 ge[i].fitness = squid.get_reward()
                 #ge[i].fitness += 0.001
+                if iterator == 999:
+                    squids.pop(i)
+                    nets.pop(i)
+                    ge.pop(i)
+            elif squid.is_goal():
+                ge[i].fitness = 1000
             else:
-                ge[i].fitness -= 10
+                ge[i].fitness -= 2
                 squids.pop(i)
                 nets.pop(i)
                 ge.pop(i)
